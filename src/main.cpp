@@ -86,7 +86,7 @@ public:
     }
     
     template <ColumnTypes T>
-    Column BinaryOp(std::function<T(T, T)> func, const std::string & colf_first_str, const std::string & col_second_str) {
+    Column BinaryOp(std::function<T(const T&, const T&)> func, const std::string & colf_first_str, const std::string & col_second_str) {
         auto it_first = df_.find(colf_first_str);
         auto it_second = df_.find(col_second_str);
 
@@ -124,7 +124,7 @@ bool gt2f (const long long & in) {
         return false;
 }
 
-long long llsumf(long long a, long long b) {
+long long llsumf(const long long & a, const long long & b) {
     return a + b;
 }
 
@@ -145,7 +145,7 @@ int main() {
     df.AddColumn(string("kenyer"), std::move(c2));
 
     function<bool(const long long&)> gt2 =gt2f;
-    function<long long(long long, long long)> llsum = llsumf;
+    function<long long(const long long&, const long long&)> llsum = llsumf;
 
     DataFrame df2 = df.Filter(gt2, string("sajt"));
 
