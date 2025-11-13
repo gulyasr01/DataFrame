@@ -9,87 +9,61 @@
 #include <functional>
 #include <concepts>
 
-// old Column with variant
-// enum class VariantError {
-//     WrongType
-// };
 
-// class Column {
-// public:
-//     // todo: just for example the by value and copy constructors
-//     //template<typename T>
-//     //explicit Column (std::vector<T> data) : col_(std::move(data)) {} // just for example the by-value and copy constructor too
-//     //template<typename T>
-//     //explicit Column (const std::vector<T>& data) : col_(data) {}
+using Column = std::variant<std::vector<long long>, std::vector<std::string>>;
 
-//     // todo: make it work to only accecpt rvalue, btw is it recommended?
-//     // template<typename T>
-//     // requires (std::same_as<std::remove_cvref_t<T>, std::vector<long long>> || 
-//     //           std::same_as<std::remove_cvref_t<T>, std::vector<std::string>>) 
-//     // explicit Column (T&& data) noexcept : col_(std::move(data)) {std::cout << "this called" << std::endl;}
+template<typename T>
+concept ColumnTypes = std::same_as<T, long long> || std::same_as<T, std::string>;
 
-//     // only move constructor for performance reasons
-//     // or factory with expected return?
-//     // maybe copy ctors too
-//     explicit Column(std::vector<long long> && data) noexcept : col_(std::move(data)) {}
-//     explicit Column(std::vector<std::string> && data) noexcept : col_(std::move(data)) {}
-
-//     constexpr bool isInt() noexcept {return std::holds_alternative<std::vector<long long>>(col_);}
-//     constexpr bool isString() noexcept {return std::holds_alternative<std::vector<std::string>>(col_);} // maybe this is not necessary
-
-//     constexpr size_t size() const noexcept {
-//         return std::visit([](const auto &col) {return col.size();}, col_); // todo use col_.visit instead but g++ complains about c++23
-//     }
-
-//     // throws, maybe use expected instead
-//     constexpr const std::vector<long long> & ints() {return std::get<std::vector<long long>>(col_);}
-//     constexpr const std::vector<std::string> & strings() {return std::get<std::vector<std::string>>(col_);}
-
-// private:
-//     std::variant<std::vector<long long>, std::vector<std::string>> col_;
-// };
-
-template <typename T>
-concept AllowedColumnTypes = std::same_as<T, long long> || std::same_as<T, std::string>;
-
-template <AllowedColumnTypes>
-class Column {
+class DataFrame {
 public:
-    explicit Column(std::vector<T> data) : col_(std::move(data)) {} // todo: move only ctor for perf reasons? - would skip 2 cheap copies
+    void AddColumn(const std::string name, Column && col) {df_.insert({name, std::move(col)});} // todo add size check
 
-
-private:
-    std::vector<T> col_;
-}
-
-struct DataFrame
-{
-public:
-    void AddColumn(std::string name, Column && col) {df_.insert({name, std::move(col)});} // todo add size check
-
-    template<typename T>
-    DataFrame Filter(std::function<bool(T)> func, const std::string col_name) {
+    template<ColumnTypes T>
+    DataFrame Filter(std::function<bool(const T&)> func, const std::string& col_name) {
         DataFrame retval;
 
-        if df_.contains(col_name) {
-            std::vector<unsigned int> rows_needed;
-            rows_needed.reserve(rows); // only one allocation for worst case - skip this is optimising for memory
-
-
-            for (int i = 0; i < rows; i++) {
-
-            }
-
-            std::vector<std::vector<T>> new_cols(df_.size(), )
+        if (!df_.contains(col_name)) {
+            return retval; // empty
         }
 
-        return DataFrame;
+        const auto & col_vec = std::get<std::vector<T>>(df_.at(col_name)); // thros if wrong type
+
+        std::vector<unsigned int> rows_needed; // only one allocation for worst case - skip this is optimising for memory
+        rows_needed.reserve(rows);
+
+        for (unsigned int i = 0; i < rows; i++) {
+            if (func(col_vec[i])) {
+                rows_needed.push_back(i);
+            }
+        }
+
+        for (const auto &it : df_) {
+            std::visit([&](auto & src_vec){
+                using ColT = std::decay_t<decltype(src_vec)>;
+                using ElemT = typename ColT::value_type;
+
+                ColT new_vec;
+                new_vec.reserve(rows_needed.size());
+
+                for (const auto idx : rows_needed) {
+                    new_vec.push_back(src_vec[idx]);
+                }
+
+                retval.AddColumn(it.first, Column{std::move(new_vec)});
+
+            }, it.second);
+        }
+
+        retval.rows = rows_needed.size();
+
+        return retval;
     }
     
     // BinOps()
 private:
     std::unordered_map<std::string, Column> df_;
-    unsigned int rows;
+    size_t rows;
 };
 
 
@@ -105,7 +79,7 @@ int main() {
     Column c(std::move(v));
     //Column c(v);
 
-    cout << c.size() << endl;
+    cout << get<0>(c)[0] << endl;
 
     DataFrame df;
     df.AddColumn(string("sajt"), std::move(c));
