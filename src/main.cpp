@@ -2,7 +2,7 @@
 #include <vector>
 #include <variant>
 #include <string>
-#include <expected>
+//#include <expected>
 #include <concepts>
 #include <type_traits>
 #include <unordered_map>
@@ -10,14 +10,40 @@
 #include <concepts>
 
 
-using Column = std::variant<std::vector<long long>, std::vector<std::string>>;
+class Column {
+public:
+    using Storage = std::variant<std::vector<long long>, std::vector<std::string>>;
+
+    explicit Column(Storage data) : data_(std::move(data)) {} // todo: explicit keyword needed?
+
+    std::size_t size() const {
+        return std::visit([](auto & arg){
+            return arg.size();
+        }, data_);
+    }
+
+    const Storage & raw() const { return data_; }
+
+private:
+    Storage data_;
+};
+
 
 template<typename T>
 concept ColumnTypes = std::same_as<T, long long> || std::same_as<T, std::string>;
 
 class DataFrame {
 public:
-    void AddColumn(const std::string name, Column && col) {df_.insert({name, std::move(col)});} // todo add size check
+
+    void AddColumn(const std::string name, Column && col) {
+        if (rows == 0) {
+            rows = col.size();
+        } else if (col.size() != rows) {
+            throw std::invalid_argument("wrong column size");
+        }
+        
+        df_.insert({name, std::move(col)}); // todo: move name?
+    } 
 
     template<ColumnTypes T>
     DataFrame Filter(std::function<bool(const T&)> func, const std::string& col_name) {
@@ -27,7 +53,7 @@ public:
             return retval; // empty
         }
 
-        const auto & col_vec = std::get<std::vector<T>>(df_.at(col_name)); // thros if wrong type
+        const auto & col_vec = std::get<std::vector<T>>(df_.at(col_name).raw()); // thros if wrong type
 
         std::vector<unsigned int> rows_needed; // only one allocation for worst case - skip this is optimising for memory
         rows_needed.reserve(rows);
@@ -41,7 +67,6 @@ public:
         for (const auto &it : df_) {
             std::visit([&](auto & src_vec){
                 using ColT = std::decay_t<decltype(src_vec)>;
-                using ElemT = typename ColT::value_type;
 
                 ColT new_vec;
                 new_vec.reserve(rows_needed.size());
@@ -52,7 +77,7 @@ public:
 
                 retval.AddColumn(it.first, Column{std::move(new_vec)});
 
-            }, it.second);
+            }, it.second.raw());
         }
 
         retval.rows = rows_needed.size();
@@ -63,12 +88,19 @@ public:
     // BinOps()
 private:
     std::unordered_map<std::string, Column> df_;
-    size_t rows;
+    std::size_t rows = 0;
 };
 
 
-std::vector<long long> getFeature(long long price_min, long long price_max) {
+// std::vector<long long> getFeature(long long price_min, long long price_max) {
 
+// }
+
+bool gt2f (const long & in) {
+    if (in > 2)
+        return true; 
+    else
+        return false;
 }
 
 using namespace std; 
@@ -79,10 +111,14 @@ int main() {
     Column c(std::move(v));
     //Column c(v);
 
-    cout << get<0>(c)[0] << endl;
+    cout << get<0>(c.raw())[0] << endl;
 
     DataFrame df;
     df.AddColumn(string("sajt"), std::move(c));
+
+    function<bool(const long long&)> gt2 =gt2f;
+
+    DataFrame df2 = df.Filter(gt2, string("sajt"));
 
     // int price_min, price_max;
     // cin >> price_min >> price_max;
