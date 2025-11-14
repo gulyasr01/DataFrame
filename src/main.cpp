@@ -113,54 +113,79 @@ private:
 };
 
 
-// std::vector<long long> getFeature(long long price_min, long long price_max) {
+std::vector<long long> getFeature(long long price_min, long long price_max) {
+    
+    std::function<bool(const std::string&)> is_btc = [](const std::string& arg) {
+        if (arg == std::string("BTC/USDT")) {
+            return true;
+        } else {
+            return false;
+        }
+    };
 
-// }
+    std::function<bool(const long long&)> in_range = [&](const long long& arg) {
+        if (arg >= price_min && arg <= price_max) {
+            return true;
+        } else {
+            return false;
+        }
+    };
 
-bool gt2f (const long long & in) {
-    if (in > 2)
-        return true; 
-    else
-        return false;
+    std::function<long long(const long long&, const long long&)> llsum = [](const long long & a, const long long & b){return a + b;};
+    std::function<long long(const long long&, const long long&)> llsub = [](const long long & a, const long long & b){return a - b;};
+    std::function<long long(const long long&, const long long&)> llmul = [](const long long & a, const long long & b){return a * b;};
+
+    // todo: refactor this df creation
+    std::string col0, col1, col2, col3, col4;
+    std::cin >> col0 >> col1 >> col2 >> col3 >> col4;
+
+    std::vector<std::string> col0_vec;
+    std::vector<long long> col1_vec, col2_vec, col3_vec, col4_vec;
+    std::string col0_val;
+    long long col1_val, col2_val, col3_val, col4_val;
+    for (int i = 0; i < 6; i++) {
+        std::cin >> col0_val >> col1_val >> col2_val >> col3_val >> col4_val;
+        col0_vec.push_back(col0_val);
+        col1_vec.push_back(col1_val);
+        col2_vec.push_back(col2_val);
+        col3_vec.push_back(col3_val);
+        col4_vec.push_back(col4_val);
+    }
+
+    DataFrame df;
+    df.AddColumn(col0, Column{move(col0_vec)});
+    df.AddColumn(col1, Column{move(col1_vec)});
+    df.AddColumn(col2, Column{move(col2_vec)});
+    df.AddColumn(col3, Column{move(col3_vec)});
+    df.AddColumn(col4, Column{move(col4_vec)});
+
+    // todo: refactor the column name creations
+    DataFrame df_btc = df.Filter(is_btc, std::string("TICKER"));
+    DataFrame df_btc_ranged = df_btc.Filter(in_range, std::string("BID_PRICE"));
+    Column col_bid = df.BinaryOp(llsum, std::string("BID_PRICE"), std::string("BID_VOLUME"));
+    Column col_ask = df.BinaryOp(llmul, std::string("ASK_VOLUME"), std::string("ASK_PRICE"));
+
+    DataFrame df_bid_ask;
+    df_bid_ask.AddColumn(std::string("bid"), std::move(col_bid));
+    df_bid_ask.AddColumn(std::string("ask"), std::move(col_ask));
+
+    Column feature = df_bid_ask.BinaryOp(llsub, std::string("bid"), std::string("ask"));
+
+    return std::get<std::vector<long long>>(feature.raw());
 }
 
-long long llsumf(const long long & a, const long long & b) {
-    return a + b;
-}
 
 using namespace std; 
 int main() {
-    
-    vector<long long> v{1, 2, 3};
-    vector<long long> v2{4, 5, 6};
 
-    Column c(std::move(v));
-    Column c2(std::move(v2));
-    //Column c(v);
+    int price_min, price_max;
+    cin >> price_min >> price_max;
 
-    cout << get<0>(c.raw())[0] << endl;
+    auto feature_vector = getFeature(price_min, price_max);
 
-    DataFrame df;
-    df.AddColumn(string("sajt"), std::move(c));
-    df.AddColumn(string("kenyer"), std::move(c2));
-
-    function<bool(const long long&)> gt2 =gt2f;
-    function<long long(const long long&, const long long&)> llsum = llsumf;
-
-    DataFrame df2 = df.Filter(gt2, string("sajt"));
-
-    Column cr = df.BinaryOp(llsum, string("sajt"), string("kenyer"));
-
-    cout << get<0>(cr.raw())[0] << endl;
-
-    // int price_min, price_max;
-    // cin >> price_min >> price_max;
-
-    // auto feature_vector = getFeature(price_min, price_max);
-
-    // for (auto &val : feature_vector) {
-    //     cout << val << endl;
-    // }
+    for (auto &val : feature_vector) {
+        cout << val << endl;
+    }
 
     return 0;
 } 
