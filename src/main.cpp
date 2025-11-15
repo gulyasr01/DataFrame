@@ -127,7 +127,10 @@ public:
             for (const auto & it : df_) {
                 if (it.second.isInt()) {
                     std::cout << std::get<std::vector<long long>>(it.second.raw())[i]  << " ";
+                } else {
+                    std::cout << std::get<std::vector<std::string>>(it.second.raw())[i]  << " ";
                 }
+                
             }
             std::cout << std::endl;
         }
@@ -201,8 +204,8 @@ std::vector<long long> getFeature(long long price_min, long long price_max) {
     df_btc_ranged.Dispaly();
 
 
-    Column col_bid = df.BinaryOp(llsum, std::string("BID_PRICE"), std::string("BID_VOLUME"));
-    Column col_ask = df.BinaryOp(llmul, std::string("ASK_VOLUME"), std::string("ASK_PRICE"));
+    Column col_bid = df_btc_ranged.BinaryOp(llmul, std::string("BID_PRICE"), std::string("BID_VOLUME"));
+    Column col_ask = df_btc_ranged.BinaryOp(llmul, std::string("ASK_VOLUME"), std::string("ASK_PRICE"));
 
     DataFrame df_bid_ask;
     df_bid_ask.AddColumn(std::string("BID"), std::move(col_bid));
