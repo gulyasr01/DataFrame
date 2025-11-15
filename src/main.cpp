@@ -22,6 +22,14 @@ public:
         }, data_);
     }
 
+    bool isInt() const {
+        if (std::holds_alternative<std::vector<long long>>(data_)) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
     const Storage & raw() const { return data_; }
 
 private:
@@ -107,6 +115,25 @@ public:
         return Column{std::move(vec_res)};
     }
 
+    void Dispaly() {
+        // print the col names
+        for (const auto & it : df_) {
+            std::cout << it.first << " ";
+        }
+        std::cout << std::endl;
+
+        // print the values
+        for (std::size_t i = 0; i < rows; i++) {
+            for (const auto & it : df_) {
+                if (it.second.isInt()) {
+                    std::cout << std::get<std::vector<long long>>(it.second.raw())[i]  << " ";
+                }
+            }
+            std::cout << std::endl;
+        }
+        std::cout << std::endl;
+    }
+
 private:
     std::unordered_map<std::string, Column> df_;
     std::size_t rows = 0;
@@ -152,6 +179,8 @@ std::vector<long long> getFeature(long long price_min, long long price_max) {
         col4_vec.push_back(col4_val);
     }
 
+    std::cout << std::endl;
+
     DataFrame df;
     df.AddColumn(col0, Column{move(col0_vec)});
     df.AddColumn(col1, Column{move(col1_vec)});
@@ -159,17 +188,29 @@ std::vector<long long> getFeature(long long price_min, long long price_max) {
     df.AddColumn(col3, Column{move(col3_vec)});
     df.AddColumn(col4, Column{move(col4_vec)});
 
+    std::cout << "original df:" << std::endl;
+    df.Dispaly();
+
     // todo: refactor the column name creations
     DataFrame df_btc = df.Filter(is_btc, std::string("TICKER"));
+    std::cout << "btc df:" << std::endl;
+    df_btc.Dispaly();
+
     DataFrame df_btc_ranged = df_btc.Filter(in_range, std::string("BID_PRICE"));
+    std::cout << "btc ranged df:" << std::endl;
+    df_btc_ranged.Dispaly();
+
+
     Column col_bid = df.BinaryOp(llsum, std::string("BID_PRICE"), std::string("BID_VOLUME"));
     Column col_ask = df.BinaryOp(llmul, std::string("ASK_VOLUME"), std::string("ASK_PRICE"));
 
     DataFrame df_bid_ask;
-    df_bid_ask.AddColumn(std::string("bid"), std::move(col_bid));
-    df_bid_ask.AddColumn(std::string("ask"), std::move(col_ask));
+    df_bid_ask.AddColumn(std::string("BID"), std::move(col_bid));
+    df_bid_ask.AddColumn(std::string("ASK"), std::move(col_ask));
+    std::cout << "bid ask df:" << std::endl;
+    df_bid_ask.Dispaly();
 
-    Column feature = df_bid_ask.BinaryOp(llsub, std::string("bid"), std::string("ask"));
+    Column feature = df_bid_ask.BinaryOp(llsub, std::string("BID"), std::string("ASK"));
 
     return std::get<std::vector<long long>>(feature.raw());
 }
@@ -177,6 +218,8 @@ std::vector<long long> getFeature(long long price_min, long long price_max) {
 
 using namespace std; 
 int main() {
+
+    cout << "enter the inputs" << endl;
 
     int price_min, price_max;
     cin >> price_min >> price_max;
