@@ -43,14 +43,14 @@ concept ColumnTypes = std::same_as<T, long long> || std::same_as<T, std::string>
 class DataFrame {
 public:
 
-    void AddColumn(const std::string & name, Column && col) {
+    void AddColumn(const std::string name, Column && col) {
         if (rows == 0) {
             rows = col.size();
         } else if (col.size() != rows) {
             throw std::invalid_argument("wrong column size");
         }
         
-        df_.insert({name, std::move(col)});
+        df_.insert({std::move(name), std::move(col)});
     } 
 
     template<ColumnTypes T>
@@ -142,9 +142,10 @@ private:
     std::size_t rows = 0;
 };
 
-
+// created the dataframe from stdin, performs the filterings and binary operations on the column and calc the result
 std::vector<long long> getFeature(long long price_min, long long price_max) {
     
+    // for filtering BTC/USDT in the dataframe
     std::function<bool(const std::string&)> is_btc = [](const std::string& arg) {
         if (arg == std::string("BTC/USDT")) {
             return true;
@@ -153,6 +154,7 @@ std::vector<long long> getFeature(long long price_min, long long price_max) {
         }
     };
 
+    // fol filtering between min and max price in the dataframe
     std::function<bool(const long long&)> in_range = [&](const long long& arg) {
         if (arg >= price_min && arg <= price_max) {
             return true;
@@ -161,49 +163,60 @@ std::vector<long long> getFeature(long long price_min, long long price_max) {
         }
     };
 
-    std::function<long long(const long long&, const long long&)> llsum = [](const long long & a, const long long & b){return a + b;};
+    // for subsracting 2 columns in the dataframe
     std::function<long long(const long long&, const long long&)> llsub = [](const long long & a, const long long & b){return a - b;};
+    
+    // for multipliening 2 coluns in the dataframe
     std::function<long long(const long long&, const long long&)> llmul = [](const long long & a, const long long & b){return a * b;};
 
-    // todo: refactor this df creation
-    std::string col0, col1, col2, col3, col4;
-    std::cin >> col0 >> col1 >> col2 >> col3 >> col4;
+    /// filling up the dataframe from stdin
+    // 5 colum names comes first
+    std::vector<std::string> col_names;
+    for (int i = 0; i < 5; i++) {
+        std::string cname;
+        std::cin >> cname;
+        col_names.push_back(cname);
+    }
 
-    std::vector<std::string> col0_vec;
-    std::vector<long long> col1_vec, col2_vec, col3_vec, col4_vec;
-    std::string col0_val;
-    long long col1_val, col2_val, col3_val, col4_val;
+    // data comes in 6 rows, 1st col is string, other 4 is int
+    std::vector<std::string> str_vec;
+    std::vector<std::vector<long long>> int_vecs(4);
     for (int i = 0; i < 6; i++) {
-        std::cin >> col0_val >> col1_val >> col2_val >> col3_val >> col4_val;
-        col0_vec.push_back(col0_val);
-        col1_vec.push_back(col1_val);
-        col2_vec.push_back(col2_val);
-        col3_vec.push_back(col3_val);
-        col4_vec.push_back(col4_val);
+        std::string str_val;
+        std::cin >> str_val;
+        str_vec.push_back(str_val);
+        for (int j = 0; j < 4; j++) {
+            long long val;
+            std::cin >> val;
+            int_vecs[j].push_back(val);
+        }
     }
 
     std::cout << std::endl;
 
     DataFrame df;
-    df.AddColumn(col0, Column{move(col0_vec)});
-    df.AddColumn(col1, Column{move(col1_vec)});
-    df.AddColumn(col2, Column{move(col2_vec)});
-    df.AddColumn(col3, Column{move(col3_vec)});
-    df.AddColumn(col4, Column{move(col4_vec)});
+    // 1st col is string
+    df.AddColumn(col_names[0], Column{move(str_vec)});
+    // 4 next cols is int
+    for (int i = 0; i < 4; i++) {
+        df.AddColumn(col_names[i+1], Column{move(int_vecs[i])});    
+    }
 
     std::cout << "original df:" << std::endl;
     df.Dispaly();
 
-    // todo: refactor the column name creations
+    // filtering TICKER for BTC/USDT
     DataFrame df_btc = df.Filter(is_btc, std::string("TICKER"));
     std::cout << "btc df:" << std::endl;
     df_btc.Dispaly();
 
+    // filtering BID_PRICE between min and max price
     DataFrame df_btc_ranged = df_btc.Filter(in_range, std::string("BID_PRICE"));
     std::cout << "btc ranged df:" << std::endl;
     df_btc_ranged.Dispaly();
 
-
+    // create 2 columns first with BID_PRICE * BID_VOLUME and ASK_VOLUME * ASK_PRICE
+    // then put them into a dataframe to perform the subraction between them
     Column col_bid = df_btc_ranged.BinaryOp(llmul, std::string("BID_PRICE"), std::string("BID_VOLUME"));
     Column col_ask = df_btc_ranged.BinaryOp(llmul, std::string("ASK_VOLUME"), std::string("ASK_PRICE"));
 
