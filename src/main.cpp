@@ -10,11 +10,14 @@
 #include <concepts>
 
 
+template<typename T>
+concept ColumnTypes = std::same_as<T, long long> || std::same_as<T, std::string>;
+
 class Column {
 public:
     using Storage = std::variant<std::vector<long long>, std::vector<std::string>>;
 
-    explicit Column(Storage data) : data_(std::move(data)) {} // todo: explicit keyword needed?
+    explicit Column(Storage data) : data_(std::move(data)) {}
 
     std::size_t size() const {
         return std::visit([](auto & arg){
@@ -22,23 +25,22 @@ public:
         }, data_);
     }
 
-    bool isInt() const {
-        if (std::holds_alternative<std::vector<long long>>(data_)) {
+    template<ColumnTypes T>
+    bool isType() const {
+        if (std::holds_alternative<std::vector<T>>(data_)) {
             return true;
         } else {
             return false;
         }
     }
 
+    // todo: generic getter
     const Storage & raw() const { return data_; }
 
 private:
     Storage data_;
 };
 
-
-template<typename T>
-concept ColumnTypes = std::same_as<T, long long> || std::same_as<T, std::string>;
 
 class DataFrame {
 public:
@@ -55,7 +57,7 @@ public:
 
     template<ColumnTypes T>
     DataFrame Filter(std::function<bool(const T&)> func, const std::string& col_name) {
-        DataFrame retval;
+        DataFrame retval; // todo: create move ctor with print and test with it (move semantic)
 
         if (!df_.contains(col_name)) {
             return retval; // empty
@@ -72,6 +74,7 @@ public:
             }
         }
 
+        // todo note: in prod, benchmark the versions
         for (const auto &it : df_) {
             std::visit([&](auto & src_vec){
                 using ColT = std::decay_t<decltype(src_vec)>;
@@ -93,6 +96,7 @@ public:
         return retval;
     }
     
+    // todo: remove this from dataframe, with 2 generics (T1, T2)
     template <ColumnTypes T>
     Column BinaryOp(std::function<T(const T&, const T&)> func, const std::string & colf_first_str, const std::string & col_second_str) {
         auto it_first = df_.find(colf_first_str);
@@ -125,7 +129,7 @@ public:
         // print the values
         for (std::size_t i = 0; i < rows; i++) {
             for (const auto & it : df_) {
-                if (it.second.isInt()) {
+                if (it.second.isType<long long>()) {
                     std::cout << std::get<std::vector<long long>>(it.second.raw())[i]  << " ";
                 } else {
                     std::cout << std::get<std::vector<std::string>>(it.second.raw())[i]  << " ";
