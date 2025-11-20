@@ -34,8 +34,27 @@ public:
         }
     }
 
-    // todo: generic getter
-    const Storage & raw() const { return data_; }
+    Column fromIndexes(const std::vector<std::size_t> & indexes) const {
+        Column new_col = std::visit([&](auto & arg){
+            using ColT = std::decay_t<decltype(arg)>;
+            ColT new_vec;
+            new_vec.reserve(indexes.size());
+
+            for (const auto i : indexes) {
+                if (i > arg.size()) {
+                    throw std::out_of_range("from index is out of range");
+                }
+                new_vec.emplace_back(arg[i]);
+            }
+
+            return Column{std::move(new_vec)};
+        }, data_);
+        
+        return new_col;
+    }
+
+    template<ColumnTypes T>
+    const std::vector<T> & raw() const { return std::get<std::vector<T>>(data_); }
 
 private:
     Storage data_;
@@ -63,32 +82,21 @@ public:
             return retval; // empty
         }
 
-        const auto & col_vec = std::get<std::vector<T>>(df_.at(col_name).raw()); // thros if wrong type
+        const auto & col_vec = df_.at(col_name).raw<T>(); // thros if wrong type
 
-        std::vector<unsigned int> rows_needed; // only one allocation for worst case - skip this is optimising for memory
+        std::vector<std::size_t> rows_needed; // only one allocation for worst case - skip this is optimising for memory
         rows_needed.reserve(rows);
 
-        for (unsigned int i = 0; i < rows; i++) {
+        for (std::size_t i = 0; i < rows; i++) {
             if (func(col_vec[i])) {
                 rows_needed.push_back(i);
             }
         }
 
         // todo note: in prod, benchmark the versions
-        for (const auto &it : df_) {
-            std::visit([&](auto & src_vec){
-                using ColT = std::decay_t<decltype(src_vec)>;
-
-                ColT new_vec;
-                new_vec.reserve(rows_needed.size());
-
-                for (const auto idx : rows_needed) {
-                    new_vec.emplace_back(src_vec[idx]);
-                }
-
-                retval.AddColumn(it.first, Column{std::move(new_vec)});
-
-            }, it.second.raw());
+        for (const auto & it : df_) {
+            Column new_col = it.second.fromIndexes(rows_needed);
+            retval.AddColumn(it.first, std::move(new_col));
         }
 
         retval.rows = rows_needed.size();
@@ -106,8 +114,8 @@ public:
             throw std::invalid_argument("invalid column name");
         }
 
-        auto col_vec_first = std::get<std::vector<T>>(it_first->second.raw()); // throws on bad type
-        auto col_vec_second = std::get<std::vector<T>>(it_second->second.raw()); // throws on bad type
+        auto col_vec_first = it_first->second.raw<T>(); // throws on bad type
+        auto col_vec_second = it_second->second.raw<T>(); // throws on bad type
 
         std::vector<T> vec_res;
         
@@ -130,9 +138,9 @@ public:
         for (std::size_t i = 0; i < rows; i++) {
             for (const auto & it : df_) {
                 if (it.second.isType<long long>()) {
-                    std::cout << std::get<std::vector<long long>>(it.second.raw())[i]  << " ";
+                    std::cout << it.second.raw<long long>()[i]  << " ";
                 } else {
-                    std::cout << std::get<std::vector<std::string>>(it.second.raw())[i]  << " ";
+                    std::cout << it.second.raw<std::string>()[i]  << " ";
                 }
                 
             }
@@ -210,19 +218,19 @@ std::vector<long long> getFeature(long long price_min, long long price_max) {
     df.Dispaly();
 
     // filtering TICKER for BTC/USDT
-    DataFrame df_btc = df.Filter(is_btc, std::string("TICKER"));
+    DataFrame df_btc = df.Filter<std::string>(is_btc, std::string("TICKER"));
     std::cout << "btc df:" << std::endl;
     df_btc.Dispaly();
 
     // filtering BID_PRICE between min and max price
-    DataFrame df_btc_ranged = df_btc.Filter(in_range, std::string("BID_PRICE"));
+    DataFrame df_btc_ranged = df_btc.Filter<long long>(in_range, std::string("BID_PRICE"));
     std::cout << "btc ranged df:" << std::endl;
     df_btc_ranged.Dispaly();
 
     // create 2 columns first with BID_PRICE * BID_VOLUME and ASK_VOLUME * ASK_PRICE
     // then put them into a dataframe to perform the subraction between them
-    Column col_bid = df_btc_ranged.BinaryOp(llmul, std::string("BID_PRICE"), std::string("BID_VOLUME"));
-    Column col_ask = df_btc_ranged.BinaryOp(llmul, std::string("ASK_VOLUME"), std::string("ASK_PRICE"));
+    Column col_bid = df_btc_ranged.BinaryOp<long long>(llmul, std::string("BID_PRICE"), std::string("BID_VOLUME"));
+    Column col_ask = df_btc_ranged.BinaryOp<long long>(llmul, std::string("ASK_VOLUME"), std::string("ASK_PRICE"));
 
     DataFrame df_bid_ask;
     df_bid_ask.AddColumn(std::string("BID"), std::move(col_bid));
@@ -230,9 +238,9 @@ std::vector<long long> getFeature(long long price_min, long long price_max) {
     std::cout << "bid ask df:" << std::endl;
     df_bid_ask.Dispaly();
 
-    Column feature = df_bid_ask.BinaryOp(llsub, std::string("BID"), std::string("ASK"));
+    Column feature = df_bid_ask.BinaryOp<long long>(llsub, std::string("BID"), std::string("ASK"));
 
-    return std::get<std::vector<long long>>(feature.raw());
+    return feature.raw<long long>();
 }
 
 
