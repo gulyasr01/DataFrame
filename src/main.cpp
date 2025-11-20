@@ -53,6 +53,23 @@ public:
         return new_col;
     }
 
+    template<ColumnTypes T1, ColumnTypes T2>
+    Column BinaryOp(std::function<T1(const T1&, const T2&)> func, const Column & col) const {
+        const auto & a = std::get<std::vector<T1>>(data_);
+        const auto & b = col.raw<T2>();
+
+        if (a.size() != b.size()) throw std::invalid_argument("different column sizes");
+
+        std::vector<T1> vec_res;
+        
+        vec_res.reserve(a.size());
+        for (size_t i = 0; i < a.size(); i++) {
+            vec_res.emplace_back(func(a[i], b[i]));
+        }
+
+        return Column{std::move(vec_res)};
+    }
+
     template<ColumnTypes T>
     const std::vector<T> & raw() const { return std::get<std::vector<T>>(data_); }
 
@@ -103,28 +120,9 @@ public:
 
         return retval;
     }
-    
-    // todo: remove this from dataframe, with 2 generics (T1, T2)
-    template <ColumnTypes T>
-    Column BinaryOp(std::function<T(const T&, const T&)> func, const std::string & colf_first_str, const std::string & col_second_str) {
-        auto it_first = df_.find(colf_first_str);
-        auto it_second = df_.find(col_second_str);
 
-        if (it_first == df_.end() || it_second == df_.end()) {
-            throw std::invalid_argument("invalid column name");
-        }
-
-        auto col_vec_first = it_first->second.raw<T>(); // throws on bad type
-        auto col_vec_second = it_second->second.raw<T>(); // throws on bad type
-
-        std::vector<T> vec_res;
-        
-        vec_res.reserve(col_vec_first.size());
-        for (size_t i = 0; i < col_vec_first.size(); i++) {
-            vec_res.emplace_back(func(col_vec_first[i], col_vec_second[i]));
-        }
-
-        return Column{std::move(vec_res)};
+    const Column & getColumn (const std::string & col_name) const {
+        return df_.at(col_name);
     }
 
     void Dispaly() {
@@ -229,17 +227,10 @@ std::vector<long long> getFeature(long long price_min, long long price_max) {
 
     // create 2 columns first with BID_PRICE * BID_VOLUME and ASK_VOLUME * ASK_PRICE
     // then put them into a dataframe to perform the subraction between them
-    Column col_bid = df_btc_ranged.BinaryOp<long long>(llmul, std::string("BID_PRICE"), std::string("BID_VOLUME"));
-    Column col_ask = df_btc_ranged.BinaryOp<long long>(llmul, std::string("ASK_VOLUME"), std::string("ASK_PRICE"));
+    Column col_bid = df_btc_ranged.getColumn(std::string("BID_PRICE")).BinaryOp<long long, long long>(llmul, df_btc_ranged.getColumn(std::string("BID_VOLUME")));
+    Column col_ask = df_btc_ranged.getColumn(std::string("ASK_VOLUME")).BinaryOp<long long, long long>(llmul, df_btc_ranged.getColumn(std::string("ASK_PRICE")));
 
-    DataFrame df_bid_ask;
-    df_bid_ask.AddColumn(std::string("BID"), std::move(col_bid));
-    df_bid_ask.AddColumn(std::string("ASK"), std::move(col_ask));
-    std::cout << "bid ask df:" << std::endl;
-    df_bid_ask.Dispaly();
-
-    Column feature = df_bid_ask.BinaryOp<long long>(llsub, std::string("BID"), std::string("ASK"));
-
+    Column feature = col_bid.BinaryOp<long long, long long>(llsub, col_ask);
     return feature.raw<long long>();
 }
 
