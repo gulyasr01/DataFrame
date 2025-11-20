@@ -10,12 +10,15 @@
 #include <concepts>
 
 
+using IntType = long long;
+using StrType = std::string;
+
 template<typename T>
-concept ColumnTypes = std::same_as<T, long long> || std::same_as<T, std::string>;
+concept ColumnTypes = std::same_as<T, IntType> || std::same_as<T, StrType>;
 
 class Column {
 public:
-    using Storage = std::variant<std::vector<long long>, std::vector<std::string>>;
+    using Storage = std::variant<std::vector<IntType>, std::vector<StrType>>;
 
     explicit Column(Storage data) : data_(std::move(data)) {}
 
@@ -81,7 +84,7 @@ private:
 class DataFrame {
 public:
 
-    void AddColumn(const std::string name, Column && col) {
+    void AddColumn(const StrType name, Column && col) {
         if (rows == 0) {
             rows = col.size();
         } else if (col.size() != rows) {
@@ -92,7 +95,7 @@ public:
     } 
 
     template<ColumnTypes T>
-    DataFrame Filter(std::function<bool(const T&)> func, const std::string& col_name) {
+    DataFrame Filter(std::function<bool(const T&)> func, const StrType& col_name) {
         DataFrame retval; // todo: create move ctor with print and test with it (move semantic)
 
         if (!df_.contains(col_name)) {
@@ -121,7 +124,7 @@ public:
         return retval;
     }
 
-    const Column & getColumn (const std::string & col_name) const {
+    const Column & getColumn (const StrType & col_name) const {
         return df_.at(col_name);
     }
 
@@ -135,10 +138,10 @@ public:
         // print the values
         for (std::size_t i = 0; i < rows; i++) {
             for (const auto & it : df_) {
-                if (it.second.isType<long long>()) {
-                    std::cout << it.second.raw<long long>()[i]  << " ";
+                if (it.second.isType<IntType>()) {
+                    std::cout << it.second.raw<IntType>()[i]  << " ";
                 } else {
-                    std::cout << it.second.raw<std::string>()[i]  << " ";
+                    std::cout << it.second.raw<StrType>()[i]  << " ";
                 }
                 
             }
@@ -148,16 +151,16 @@ public:
     }
 
 private:
-    std::unordered_map<std::string, Column> df_;
+    std::unordered_map<StrType, Column> df_;
     std::size_t rows = 0;
 };
 
 // created the dataframe from stdin, performs the filterings and binary operations on the column and calc the result
-std::vector<long long> getFeature(long long price_min, long long price_max) {
+std::vector<IntType> getFeature(IntType price_min, IntType price_max) {
     
     // for filtering BTC/USDT in the dataframe
-    std::function<bool(const std::string&)> is_btc = [](const std::string& arg) {
-        if (arg == std::string("BTC/USDT")) {
+    std::function<bool(const StrType&)> is_btc = [](const StrType& arg) {
+        if (arg == StrType("BTC/USDT")) {
             return true;
         } else {
             return false;
@@ -165,7 +168,7 @@ std::vector<long long> getFeature(long long price_min, long long price_max) {
     };
 
     // fol filtering between min and max price in the dataframe
-    std::function<bool(const long long&)> in_range = [&](const long long& arg) {
+    std::function<bool(const IntType&)> in_range = [&](const IntType& arg) {
         if (arg >= price_min && arg <= price_max) {
             return true;
         } else {
@@ -174,29 +177,29 @@ std::vector<long long> getFeature(long long price_min, long long price_max) {
     };
 
     // for subsracting 2 columns in the dataframe
-    std::function<long long(const long long&, const long long&)> llsub = [](const long long & a, const long long & b){return a - b;};
+    std::function<IntType(const IntType&, const IntType&)> llsub = [](const IntType & a, const IntType & b){return a - b;};
     
     // for multipliening 2 coluns in the dataframe
-    std::function<long long(const long long&, const long long&)> llmul = [](const long long & a, const long long & b){return a * b;};
+    std::function<IntType(const IntType&, const IntType&)> llmul = [](const IntType & a, const IntType & b){return a * b;};
 
     /// filling up the dataframe from stdin
     // 5 colum names comes first
-    std::vector<std::string> col_names;
+    std::vector<StrType> col_names;
     for (int i = 0; i < 5; i++) {
-        std::string cname;
+        StrType cname;
         std::cin >> cname;
         col_names.push_back(cname);
     }
 
     // data comes in 6 rows, 1st col is string, other 4 is int
-    std::vector<std::string> str_vec;
-    std::vector<std::vector<long long>> int_vecs(4);
+    std::vector<StrType> str_vec;
+    std::vector<std::vector<IntType>> int_vecs(4);
     for (int i = 0; i < 6; i++) {
-        std::string str_val;
+        StrType str_val;
         std::cin >> str_val;
         str_vec.push_back(str_val);
         for (int j = 0; j < 4; j++) {
-            long long val;
+            IntType val;
             std::cin >> val;
             int_vecs[j].push_back(val);
         }
@@ -216,22 +219,22 @@ std::vector<long long> getFeature(long long price_min, long long price_max) {
     df.Dispaly();
 
     // filtering TICKER for BTC/USDT
-    DataFrame df_btc = df.Filter<std::string>(is_btc, std::string("TICKER"));
+    DataFrame df_btc = df.Filter<StrType>(is_btc, StrType("TICKER"));
     std::cout << "btc df:" << std::endl;
     df_btc.Dispaly();
 
     // filtering BID_PRICE between min and max price
-    DataFrame df_btc_ranged = df_btc.Filter<long long>(in_range, std::string("BID_PRICE"));
+    DataFrame df_btc_ranged = df_btc.Filter<IntType>(in_range, StrType("BID_PRICE"));
     std::cout << "btc ranged df:" << std::endl;
     df_btc_ranged.Dispaly();
 
     // create 2 columns first with BID_PRICE * BID_VOLUME and ASK_VOLUME * ASK_PRICE
     // then put them into a dataframe to perform the subraction between them
-    Column col_bid = df_btc_ranged.getColumn(std::string("BID_PRICE")).BinaryOp<long long, long long>(llmul, df_btc_ranged.getColumn(std::string("BID_VOLUME")));
-    Column col_ask = df_btc_ranged.getColumn(std::string("ASK_VOLUME")).BinaryOp<long long, long long>(llmul, df_btc_ranged.getColumn(std::string("ASK_PRICE")));
+    Column col_bid = df_btc_ranged.getColumn(StrType("BID_PRICE")).BinaryOp<IntType, IntType>(llmul, df_btc_ranged.getColumn(StrType("BID_VOLUME")));
+    Column col_ask = df_btc_ranged.getColumn(StrType("ASK_VOLUME")).BinaryOp<IntType, IntType>(llmul, df_btc_ranged.getColumn(StrType("ASK_PRICE")));
 
-    Column feature = col_bid.BinaryOp<long long, long long>(llsub, col_ask);
-    return feature.raw<long long>();
+    Column feature = col_bid.BinaryOp<IntType, IntType>(llsub, col_ask);
+    return feature.raw<IntType>();
 }
 
 
